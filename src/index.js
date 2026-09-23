@@ -125,6 +125,9 @@ async function handle(req, env){
     const r=await env.AI.run("@cf/black-forest-labs/flux-1-schnell",{prompt:`Türkçe sağlık bilgilendirme tasarımı, lacivert turkuaz beyaz, temiz ve profesyonel, ${prompt}`});
     return new Response(r,{headers:{"content-type":"image/jpeg","cache-control":"no-store"}});
   }
+
+  // Static assets (logo, favicon, etc.) are served by Cloudflare Assets.
+  if(env.ASSETS) return env.ASSETS.fetch(req);
   return new Response("Not Found",{status:404});
 }
 export default {fetch:handle};
