@@ -1,0 +1,6 @@
+{
+  "name": "social-publisher",
+  "private": true,
+  "scripts": {"deploy":"wrangler deploy"},
+  "devDependencies": {"wrangler":"latest"}
+}
