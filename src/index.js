@@ -77,7 +77,7 @@ async function runAI(){
 }
 async function makeImage(){
  const out=document.querySelector('#out');out.innerHTML='<div class="out">Görsel oluşturuluyor…</div>';
- try{const r=await fetch('/api/ai-image',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({prompt:document.querySelector('#cmd').value||'Metabolik ve bariatrik cerrahi hakkında sade, profesyonel sağlık bilgilendirme görseli'})});const d=await r.json();if(!r.ok)throw Error(d.error||'Görsel üretim hatası');out.innerHTML='<div class="out">Görsel üretildi. '+(d.note||'')+'</div>'}catch(e){out.innerHTML='<div class="out">❌ '+esc(e.message)+'</div>'}
+ try{const r=await fetch('/api/ai-image',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({prompt:document.querySelector('#cmd').value||'Metabolik ve bariatrik cerrahi hakkında sade, profesyonel sağlık bilgilendirme görseli'})});if(!r.ok){let d=await r.json().catch(()=>({}));throw Error(d.error||'Görsel üretim hatası')}const blob=await r.blob();const u=URL.createObjectURL(blob);out.innerHTML='<div class="out">Görsel üretildi.<br><img src="'+u+'" style="max-width:100%;border-radius:16px;margin-top:10px" alt="AI görseli"></div>'}catch(e){out.innerHTML='<div class="out">❌ '+esc(e.message)+'</div>'}
 }
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 fetch('/api/me').then(r=>r.json()).then(d=>document.querySelector('#status').innerHTML=d.connected?'✅ Meta bağlantısı aktif.':'Henüz Meta bağlantısı yok.').catch(()=>{})
