@@ -26,7 +26,7 @@ function readCookie(req,name){
   return null;
 }
 async function graph(path, token, options={}){
-  const u=new URL("https://graph.facebook.com/v23.0"+path);
+  const u=new URL("https://graph.facebook.com/v26.0"+path);
   if(token) u.searchParams.set("access_token",token);
   const r=await fetch(u,options);
   const d=await r.json();
@@ -63,7 +63,7 @@ textarea{min-height:130px;resize:vertical}.row{display:flex;gap:10px;flex-wrap:w
 <p class="muted">Komutunu yaz. Açıklama, SEO dili ve 5 hashtag için taslak oluştur.</p>
 <textarea id="cmd" placeholder="Örn: Açıklamayı daha bilimsel yaz ve Doktor Erol Vural ifadesini doğal şekilde ekle."></textarea>
 <div class="row" style="margin-top:10px"><button class="btn teal" onclick="runAI()">AI ile Düzenle</button><button class="btn green" onclick="makeImage()">Görsel Oluştur</button></div>
-<div id="out"></div>
+<div id="out" aria-live="polite"></div>
 </section>
 <section class="card">
 <h2>Yayınlama</h2><p class="muted">Önce Meta bağlantısını kur. Sayfalar ve Instagram Professional hesapları API'den getirilecek.</p>
@@ -77,11 +77,31 @@ async function runAI(){
 }
 async function makeImage(){
  const out=document.querySelector('#out');out.innerHTML='<div class="out">Görsel oluşturuluyor…</div>';
- try{const r=await fetch('/api/ai-image',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({prompt:document.querySelector('#cmd').value||'Metabolik ve bariatrik cerrahi hakkında sade, profesyonel sağlık bilgilendirme görseli'})});if(!r.ok){let d=await r.json().catch(()=>({}));throw Error(d.error||'Görsel üretim hatası')}const blob=await r.blob();const u=URL.createObjectURL(blob);out.innerHTML='<div class="out">Görsel üretildi.<br><img src="'+u+'" style="max-width:100%;border-radius:16px;margin-top:10px" alt="AI görseli"></div>'}catch(e){out.innerHTML='<div class="out">❌ '+esc(e.message)+'</div>'}
+ try{const r=await fetch('/api/ai-image',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({prompt:document.querySelector('#cmd').value||'Metabolik ve bariatrik cerrahi hakkında sade, profesyonel sağlık bilgilendirme görseli'})});if(!r.ok){let d=await r.json().catch(()=>({}));throw Error(d.error||'Görsel üretim hatası')}const d=await r.json();if(!d.dataURI)throw Error(d.error||'Görsel verisi alınamadı');out.innerHTML='<div class="out">Görsel üretildi.<br><img src="'+d.dataURI+'" style="display:block;width:100%;max-width:640px;height:auto;border-radius:16px;margin-top:10px" alt="AI görseli"></div>'}catch(e){out.innerHTML='<div class="out">❌ '+esc(e.message)+'</div>'}
 }
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 fetch('/api/me').then(r=>r.json()).then(d=>document.querySelector('#status').innerHTML=d.connected?'✅ Meta bağlantısı aktif.':'Henüz Meta bağlantısı yok.').catch(()=>{})
 </script></body></html>`;
+
+function extractAIText(r){
+  const candidates=[
+    r?.response,
+    r?.output_text,
+    r?.text,
+    r?.choices?.[0]?.message?.content,
+    r?.choices?.[0]?.text,
+    r?.result?.response,
+    r?.result?.text
+  ];
+  for(const v of candidates){
+    if(typeof v === "string" && v.trim()) return v.trim();
+    if(v && typeof v === "object"){
+      const nested=v.content ?? v.text ?? v.value;
+      if(typeof nested === "string" && nested.trim()) return nested.trim();
+    }
+  }
+  return typeof r === "string" ? r : JSON.stringify(r,null,2);
+}
 
 async function handle(req, env){
   const url=new URL(req.url);
@@ -93,14 +113,14 @@ async function handle(req, env){
     const state=crypto.randomUUID();
     const redirectUri=url.origin+"/callback";
     const p=new URLSearchParams({client_id:String(env.META_APP_ID||"").trim(),redirect_uri:redirectUri,state,response_type:"code",scope:"pages_show_list,pages_read_engagement,pages_manage_posts"});
-    // Use Meta's versionless OAuth dialog URL. public_profile is not requested explicitly here; the Pages permissions are the actual requirements for this publisher.
-    return redirect("https://www.facebook.com/dialog/oauth?"+p.toString(),[cookie("oauth_state",state,600)]);
+    // Pin the OAuth dialog and Graph API to the current Graph API version. public_profile is not requested explicitly here.
+    return redirect("https://www.facebook.com/v26.0/dialog/oauth?"+p.toString(),[cookie("oauth_state",state,600)]);
   }
   if(url.pathname==="/callback"){
     const state=url.searchParams.get("state"), saved=readCookie(req,"oauth_state"), code=url.searchParams.get("code");
     if(!code || !state || state!==saved) return new Response("OAuth state doğrulaması başarısız.",{status:400});
     const redirectUri=url.origin+"/callback";
-    const tokenUrl=new URL("https://graph.facebook.com/v23.0/oauth/access_token");
+    const tokenUrl=new URL("https://graph.facebook.com/v26.0/oauth/access_token");
     tokenUrl.searchParams.set("client_id",env.META_APP_ID);tokenUrl.searchParams.set("client_secret",env.META_APP_SECRET);tokenUrl.searchParams.set("redirect_uri",redirectUri);tokenUrl.searchParams.set("code",code);
     const r=await fetch(tokenUrl);const d=await r.json();
     if(!r.ok||d.error) return html(`<h1>Meta OAuth hatası</h1><pre>${JSON.stringify(d,null,2)}</pre>`);
@@ -118,14 +138,16 @@ async function handle(req, env){
     const body=await req.json().catch(()=>({}));const command=body.command||"";
     if(!command)return json({error:"Komut boş."},400);
     const prompt=`Türkçe sosyal medya sağlık içeriği editörüsün. Kullanıcının komutunu uygula. Reklam/pazarlama iddiaları üretme; sağlık bilgisini bilgilendirici ve temkinli yaz. Doğal şekilde gerekirse Doktor Erol Vural, Doç. Dr. Erol Vural veya Dr. Erol Vural ifadelerinden uygun olanını kullan. Tam olarak 5 hashtag üret. Kullanıcı komutu: ${command}`;
-    const r=await env.AI.run("@cf/google/gemma-4-26b-a4b-it",{messages:[{role:"user",content:prompt}]});
-    return json({text:r.response||r});
+    const r=await env.AI.run("@cf/google/gemma-4-26b-a4b-it",{messages:[{role:"user",content:prompt}],chat_template_kwargs:{enable_thinking:false}});
+    const text = extractAIText(r);
+    return json({text});
   }
   if(url.pathname==="/api/ai-image" && req.method==="POST"){
     if(!env.AI)return json({error:"Workers AI binding bulunamadı."},500);
     const body=await req.json().catch(()=>({}));const prompt=body.prompt||"Profesyonel sağlık bilgilendirme görseli";
-    const r=await env.AI.run("@cf/black-forest-labs/flux-1-schnell",{prompt:`Türkçe sağlık bilgilendirme tasarımı, lacivert turkuaz beyaz, temiz ve profesyonel, ${prompt}`});
-    return new Response(r,{headers:{"content-type":"image/jpeg","cache-control":"no-store"}});
+    const r=await env.AI.run("@cf/black-forest-labs/flux-1-schnell",{prompt:`Türkçe sağlık bilgilendirme tasarımı, lacivert turkuaz beyaz, temiz ve profesyonel, yazıları okunaklı ve gereksiz tıbbi iddia içermeyen bir sosyal medya görseli, ${prompt}`,steps:4});
+    if(!r || !r.image) return json({error:"Görsel modeli görüntü döndürmedi."},502);
+    return json({dataURI:`data:image/jpeg;base64,${r.image}`});
   }
 
   // Static assets (logo, favicon, etc.) are served by Cloudflare Assets.
