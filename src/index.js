@@ -89,10 +89,12 @@ async function handle(req, env){
   if(url.pathname==="/privacy") return html(`<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Gizlilik Politikası</title></head><body style="font-family:Arial;max-width:760px;margin:40px auto;padding:20px;line-height:1.7"><h1>Gizlilik Politikası</h1><p>Bu uygulama, kullanıcının yetkili olduğu Meta hesapları ve Sayfaları üzerinden içerik yönetimi ve yayınlama işlemleri için tasarlanmıştır.</p><p>Uygulama R2, KV veya D1 ile kalıcı içerik arşivi oluşturmaz.</p><p>İletişim: qasimm2012@gmail.com</p></body></html>`);
 
   if(url.pathname==="/login"){
+    if(!env.META_APP_ID) return new Response("META_APP_ID eksik.",{status:500});
     const state=crypto.randomUUID();
     const redirectUri=url.origin+"/callback";
-    const p=new URLSearchParams({client_id:env.META_APP_ID,redirect_uri:redirectUri,state,response_type:"code",scope:"public_profile,pages_show_list,pages_read_engagement,pages_manage_posts"});
-    return redirect("https://www.facebook.com/v23.0/dialog/oauth?"+p.toString(),[cookie("oauth_state",state,600)]);
+    const p=new URLSearchParams({client_id:String(env.META_APP_ID||"").trim(),redirect_uri:redirectUri,state,response_type:"code",scope:"pages_show_list,pages_read_engagement,pages_manage_posts"});
+    // Use Meta's versionless OAuth dialog URL. public_profile is not requested explicitly here; the Pages permissions are the actual requirements for this publisher.
+    return redirect("https://www.facebook.com/dialog/oauth?"+p.toString(),[cookie("oauth_state",state,600)]);
   }
   if(url.pathname==="/callback"){
     const state=url.searchParams.get("state"), saved=readCookie(req,"oauth_state"), code=url.searchParams.get("code");
