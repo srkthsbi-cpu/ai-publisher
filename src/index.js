@@ -114,13 +114,13 @@ async function handle(req, env){
     const redirectUri=url.origin+"/callback";
     const p=new URLSearchParams({client_id:String(env.META_APP_ID||"").trim(),redirect_uri:redirectUri,state,response_type:"code",scope:"pages_show_list,pages_read_engagement,pages_manage_posts"});
     // Pin the OAuth dialog and Graph API to the current Graph API version. public_profile is not requested explicitly here.
-    return redirect("https://www.facebook.com/v26.0/dialog/oauth?"+p.toString(),[cookie("oauth_state",state,600)]);
+    return redirect("https://www.facebook.com/dialog/oauth?"+p.toString(),[cookie("oauth_state",state,600)]);
   }
   if(url.pathname==="/callback"){
     const state=url.searchParams.get("state"), saved=readCookie(req,"oauth_state"), code=url.searchParams.get("code");
     if(!code || !state || state!==saved) return new Response("OAuth state doğrulaması başarısız.",{status:400});
     const redirectUri=url.origin+"/callback";
-    const tokenUrl=new URL("https://graph.facebook.com/v26.0/oauth/access_token");
+    const tokenUrl=new URL("https://graph.facebook.com/oauth/access_token");
     tokenUrl.searchParams.set("client_id",env.META_APP_ID);tokenUrl.searchParams.set("client_secret",env.META_APP_SECRET);tokenUrl.searchParams.set("redirect_uri",redirectUri);tokenUrl.searchParams.set("code",code);
     const r=await fetch(tokenUrl);const d=await r.json();
     if(!r.ok||d.error) return html(`<h1>Meta OAuth hatası</h1><pre>${JSON.stringify(d,null,2)}</pre>`);
