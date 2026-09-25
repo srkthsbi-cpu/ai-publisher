@@ -112,8 +112,8 @@ async function handle(req, env){
     if(!env.META_APP_ID) return new Response("META_APP_ID eksik.",{status:500});
     const state=crypto.randomUUID();
     const redirectUri=url.origin+"/callback";
-    const p=new URLSearchParams({client_id:String(env.META_APP_ID||"").trim(),redirect_uri:redirectUri,state,response_type:"code",scope:"pages_show_list,pages_read_engagement,pages_manage_posts"});
-    // Pin the OAuth dialog and Graph API to the current Graph API version. public_profile is not requested explicitly here.
+    const p=new URLSearchParams({client_id:String(env.META_APP_ID||"").trim(),redirect_uri:redirectUri,state,response_type:"code",scope:"public_profile,pages_show_list,pages_read_engagement,pages_manage_posts"});
+    // Facebook Login requires public_profile for the standard Login flow; page permissions remain requested at standard access.
     return redirect("https://www.facebook.com/dialog/oauth?"+p.toString(),[cookie("oauth_state",state,600)]);
   }
   if(url.pathname==="/callback"){
